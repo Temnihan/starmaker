@@ -1,0 +1,6 @@
+services:
+  - type: worker
+    name: your-bot-name # Замени на название своего бота
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py # Или имя твоего файла
