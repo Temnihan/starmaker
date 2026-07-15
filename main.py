@@ -4,7 +4,8 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ===== 1. Токен бота =====
-TOKEN = "8665718973:AAEw3or2gqDbfJc17Xo7O7mKfDqaXHzKfoc"
+import os
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 # ===== Временное хранилище для recordingId (связываем с chat_id) =====
