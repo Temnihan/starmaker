@@ -98,7 +98,7 @@ def handle_callback(call):
             return
 
         try:
-            bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! \n {SUPPORT_TEXT}")
+            bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! ")
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
 
@@ -117,11 +117,14 @@ def handle_callback(call):
             audio_bytes = io.BytesIO()
             audio.export(audio_bytes, format="mp3", bitrate="128k")
             audio_bytes.seek(0)
-            bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио! \n {SUPPORT_TEXT}")
+            bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио!")
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
     elif call.data == "support":
-        bot.send_message(chat_id, SUPPORT_TEXT)
+        # Вместо bot.send_message(chat_id, SUPPORT_TEXT)
+        with open('sber-phone-qr.png', 'rb') as photo:
+            bot.send_photo(chat_id, photo, caption="❤️ Отсканируйте QR-код, чтобы поддержать проект!")
+        #bot.send_message(chat_id, SUPPORT_TEXT)
     # Очищаем данные после обработки
     user_data.pop(chat_id, None)
 
