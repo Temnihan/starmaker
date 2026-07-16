@@ -71,7 +71,7 @@ def handle_message(message):
 def handle_callback(call):
     chat_id = call.message.chat.id
     rec_id = user_data.get(chat_id)
-    print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data} для rec_id={rec_id}")ыв
+    print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data} для rec_id={rec_id}")
 
     if not rec_id:
         bot.answer_callback_query(call.id, "Сначала отправь ссылку с recordingId!")
