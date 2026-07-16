@@ -11,6 +11,7 @@ bot = telebot.TeleBot(TOKEN)
 
 # ===== Временное хранилище для recordingId (связываем с chat_id) =====
 user_data = {}
+SUPPORT_TEXT = "Ваша поддержка — лучшая благодарность. \n🧡 89173976643 (Любой банк)"
 
 
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
@@ -96,7 +97,7 @@ def handle_callback(call):
             return
 
         try:
-            bot.send_video(chat_id, video_data, caption="🎬 Вот твоё видео!")
+            bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! \n {SUPPORT_TEXT}")
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
 
@@ -115,7 +116,7 @@ def handle_callback(call):
             audio_bytes = io.BytesIO()
             audio.export(audio_bytes, format="mp3", bitrate="128k")
             audio_bytes.seek(0)
-            bot.send_audio(chat_id, audio_bytes, caption="🎵 Вот твоё аудио!")
+            bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио! \n {SUPPORT_TEXT}")
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
 
