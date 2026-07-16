@@ -57,12 +57,12 @@ def handle_message(message):
     keyboard = InlineKeyboardMarkup(row_width=2)
     btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="video")
     btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="audio")
-    btn_support = InlineKeyboardButton("❤️ Поддержать", callback_data="support")
+    btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
     keyboard.add(btn_video, btn_audio, btn_support)
 
     bot.reply_to(
         message,
-        f"✅ Нашёл recordingId: `{rec_id}`\nЧто хочешь получить?",
+        f"✅ Нашёл \nЧто хочешь получить?",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
