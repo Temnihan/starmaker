@@ -97,45 +97,23 @@ def handle_callback(call):
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
 
     elif call.data == "audio":
-        # ===========================================================
-        # ВАЖНО: СЕЙЧАС КНОПКА "АУДИО" РАБОТАЕТ КАК ВИДЕО (заглушка)
-        # Потому что у нас нет ffmpeg для конвертации на этом компьютере.
-        # Когда перенесёшь бота на сервер (PythonAnywhere и др.):
-        # 1. Установи там ffmpeg (команда в терминале)
-        # 2. Установи библиотеку pydub (pip install pydub)
-        # 3. Раскомментируй код внизу и закомментируй этот блок-заглушку.
-        # ===========================================================
-        bot.send_message(chat_id, "🎵 Пока я умею отправлять только видео. На сервере я научусь конвертировать в MP3!")
-
-        # --- ВРЕМЕННАЯ ЗАГЛУШКА (отправляем видео вместо аудио) ---
-        video_data = download_file(video_url)
-        if video_data is None:
-            bot.send_message(chat_id, "❌ Не удалось скачать видео.")
-            return
         try:
-            bot.send_video(chat_id, video_data, caption="⏳ Скоро здесь будет MP3! (пока отправляю видео)")
-        except Exception as e:
-            bot.send_message(chat_id, f"❌ Ошибка: {e}")
-        # --- КОНЕЦ ЗАГЛУШКИ ---
+            from pydub import AudioSegment
+            import io
 
-        # ===== КОД ДЛЯ СЕРВЕРА (раскомментируй, когда будет ffmpeg) =====
-        # try:
-        #     from pydub import AudioSegment
-        #     import io
-        #
-        #     bot.send_message(chat_id, "🎵 Скачиваю и конвертирую в MP3...")
-        #     video_data = download_file(video_url)
-        #     if video_data is None:
-        #         bot.send_message(chat_id, "❌ Не удалось скачать видео.")
-        #         return
-        #
-        #     audio = AudioSegment.from_file(io.BytesIO(video_data), format="mp4")
-        #     audio_bytes = io.BytesIO()
-        #     audio.export(audio_bytes, format="mp3", bitrate="128k")
-        #     audio_bytes.seek(0)
-        #     bot.send_audio(chat_id, audio_bytes, caption="🎵 Вот твоё аудио!")
-        # except Exception as e:
-        #     bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
+            bot.send_message(chat_id, "🎵 Скачиваю и конвертирую в MP3...")
+            video_data = download_file(video_url)
+            if video_data is None:
+                bot.send_message(chat_id, "❌ Не удалось скачать видео.")
+                return
+
+            audio = AudioSegment.from_file(io.BytesIO(video_data), format="mp4")
+            audio_bytes = io.BytesIO()
+            audio.export(audio_bytes, format="mp3", bitrate="128k")
+            audio_bytes.seek(0)
+            bot.send_audio(chat_id, audio_bytes, caption="🎵 Вот твоё аудио!")
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
 
     # Очищаем данные после обработки
     user_data.pop(chat_id, None)
