@@ -122,8 +122,8 @@ def handle_callback(call):
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
     elif call.data == "support":
         # Вместо bot.send_message(chat_id, SUPPORT_TEXT)
-        with open('sber-phone-qr.png', 'rb') as photo:
-            bot.send_photo(chat_id, photo, caption="❤️ Отсканируйте QR-код, чтобы поддержать проект!")
+        with open('sber-phone-qr1.jpg', 'rb') as photo:
+            bot.send_photo(chat_id, photo, caption=f"❤️ {SUPPORT_TEXT}!")
         #bot.send_message(chat_id, SUPPORT_TEXT)
     # Очищаем данные после обработки
     user_data.pop(chat_id, None)
