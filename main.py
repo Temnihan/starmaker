@@ -54,10 +54,11 @@ def handle_message(message):
     user_data[message.chat.id] = rec_id
 
     # Создаём кнопки
-    keyboard = InlineKeyboardMarkup()
+    keyboard = InlineKeyboardMarkup(row_width=2)
     btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="video")
     btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="audio")
-    keyboard.add(btn_video, btn_audio)
+    btn_support = InlineKeyboardButton("❤️ Поддержать", callback_data="support")
+    keyboard.add(btn_video, btn_audio, btn_support)
 
     bot.reply_to(
         message,
@@ -119,7 +120,8 @@ def handle_callback(call):
             bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио! \n {SUPPORT_TEXT}")
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
-
+    elif call.data == "support":
+        bot.send_message(chat_id, SUPPORT_TEXT)
     # Очищаем данные после обработки
     user_data.pop(chat_id, None)
 
