@@ -3,7 +3,9 @@ import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import datetime
-
+import gc   # для очищения памяти
+# for you tube
+import yt_dlp
 # ===== 1. Токен бота =====
 import os
 TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TOKEN")
@@ -39,13 +41,17 @@ def download_file(url):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     text = message.text
+    rec_id = extract_recording_id(text)
     if not text:
-        bot.reply_to(message, "Пришли ссылку на запись StarMaker.")
+        bot.reply_to(message, "Пришли ссылку ")
         return
+        # --- ПРОВЕРКА НА YOUTUBE ---
+    if 'youtube.com' in text or 'youtu.be' in text:
+        bot.reply_to(message, "🎬 Обнаружена ссылка YouTube. Начинаю скачивание...")
     print(
         f"[{datetime.datetime.now()}] Пользователь {message.from_user.id} (@{message.from_user.username}) отправил ссылку: {text[:100]}...")
 
-    rec_id = extract_recording_id(text)
+
     if not rec_id:
         bot.reply_to(message, "❌ Не нашёл recordingId в ссылке. Убедись, что ссылка содержит 'recordingId='.")
         return
@@ -99,8 +105,12 @@ def handle_callback(call):
 
         try:
             bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! ")
+
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
+        finally:
+            del video_data
+            gc.collect()
 
     elif call.data == "audio":
         try:
@@ -118,6 +128,13 @@ def handle_callback(call):
             audio.export(audio_bytes, format="mp3", bitrate="128k")
             audio_bytes.seek(0)
             bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио!")
+
+            # Очистка
+            del audio
+            del audio_bytes
+            del video_data
+            gc.collect()
+
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
     elif call.data == "support":
