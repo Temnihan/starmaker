@@ -268,8 +268,12 @@ def handle_callback(call):
             # Списываем кредит и записываем загрузку
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "youtube", fmt, title, file_size_mb, url)
-            remaining = get_user_credits(call.from_user.id)
-            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            user = get_or_create_user(call.from_user.id)
+            if user['total_downloads'] >= 5:
+                remaining = get_user_credits(call.from_user.id)
+                bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            else:
+                bot.send_message(chat_id, "✅ Скачано!")
             os.remove(filepath)
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка: {e}")
@@ -306,8 +310,12 @@ def handle_callback(call):
             file_size_mb = round(len(video_data) / 1024 / 1024, 2)
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "starmaker", "video", f"StarMaker #{rec_id}", file_size_mb, video_url)
-            remaining = get_user_credits(call.from_user.id)
-            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            user = get_or_create_user(call.from_user.id)
+            if user['total_downloads'] >= 5:
+                remaining = get_user_credits(call.from_user.id)
+                bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            else:
+                bot.send_message(chat_id, "✅ Скачано!")
 
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
@@ -335,8 +343,12 @@ def handle_callback(call):
             file_size_mb = round(len(audio_bytes.getvalue()) / 1024 / 1024, 2)
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "starmaker", "audio", f"StarMaker #{rec_id}", file_size_mb, video_url)
-            remaining = get_user_credits(call.from_user.id)
-            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            user = get_or_create_user(call.from_user.id)
+            if user['total_downloads'] >= 5:
+                remaining = get_user_credits(call.from_user.id)
+                bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
+            else:
+                bot.send_message(chat_id, "✅ Скачано!")
 
             # Очистка
             del audio
