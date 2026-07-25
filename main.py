@@ -6,6 +6,8 @@ import datetime
 import gc   # для очищения памяти
 # for you tube
 import yt_dlp
+# для базы данных
+import sqlite3
 # ===== 1. Токен бота =====
 import os
 TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TOKEN")
@@ -15,6 +17,62 @@ bot = telebot.TeleBot(TOKEN)
 user_data = {}
 SUPPORT_TEXT = "Ваша поддержка — лучшая благодарность. \n🧡)"
 ADMIN_CHAT_ID = 158043939  # Твой Telegram ID для уведомлений
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bot.db')
+
+
+# ===== Функции работы с базой данных =====
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_or_create_user(user_id, username=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+    user = c.fetchone()
+    if not user:
+        c.execute("INSERT INTO users (user_id, username, credits) VALUES (?, ?, 5)",
+                  (user_id, username))
+        conn.commit()
+        c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+        user = c.fetchone()
+    conn.close()
+    return user
+
+def use_credit(user_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE users SET credits = credits - 1, total_downloads = total_downloads + 1 WHERE user_id=? AND credits > 0", (user_id,))
+    changed = c.rowcount
+    conn.commit()
+    conn.close()
+    return changed > 0
+
+def add_credits(user_id, amount=5):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE users SET credits = credits + ?, shares = shares + 1 WHERE user_id=?", (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def record_download(user_id, platform, fmt, title, file_size_mb, url):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""INSERT INTO downloads (user_id, platform, format, title, file_size_mb, url)
+                 VALUES (?, ?, ?, ?, ?, ?)""",
+              (user_id, platform, fmt, title, file_size_mb, url))
+    c.execute("UPDATE users SET total_mb = total_mb + ? WHERE user_id=?", (file_size_mb, user_id))
+    conn.commit()
+    conn.close()
+
+def get_user_credits(user_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT credits FROM users WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row['credits'] if row else 0
 
 
 # ===== Функция скачивания YouTube =====
@@ -61,13 +119,57 @@ def download_file(url):
         return None
 
 
-# ===== 4. Обработчик текстовых сообщений =====
+# ===== 4. Обработчик команды /start =====
+@bot.message_handler(commands=['start'])
+def start_message(message):
+    user = get_or_create_user(message.from_user.id, message.from_user.username)
+    bot.reply_to(message,
+        f"👋 Привет, {message.from_user.first_name}!\n\n"
+        f"📌 Как пользоваться:\n"
+        f"1. Скопируй ссылку из StarMaker или YouTube\n"
+        f"2. Вставь её сюда\n"
+        f"3. Выбери формат (видео или аудио)\n\n"
+        f"🎁 У тебя {user['credits']} скачиваний\n"
+        f"📢 Хочешь больше? Напиши /share\n\n"
+        f"Просто вставь ссылку 👇")
+
+
+# ===== 4.1 Обработчик команды /share =====
+@bot.message_handler(commands=['share'])
+def share_message(message):
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
+    btn_done = InlineKeyboardButton("✅ Я поделился! (+5 скачиваний)", callback_data="share_done")
+    keyboard.add(btn_share, btn_done)
+    bot.reply_to(message,
+        "📢 Поделись ботом с друзьями!\n\n"
+        "1. Нажми «Поделиться ботом»\n"
+        "2. Выбери кому отправить\n"
+        "3. Вернись сюда и нажми «Я поделился!»\n\n"
+        "🎁 Получишь +5 скачиваний!",
+        reply_markup=keyboard)
+
+
+# ===== 5. Обработчик текстовых сообщений =====
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     text = message.text
     rec_id = extract_recording_id(text)
     if not text:
         bot.reply_to(message, "Пришли ссылку ")
+        return
+
+    # Регистрируем/получаем пользователя и проверяем кредиты
+    user = get_or_create_user(message.from_user.id, message.from_user.username)
+    if user['credits'] <= 0:
+        bot.reply_to(message,
+            "😔 У тебя закончились скачивания!\n\n"
+            "📢 Поделись ботом с друзьями, чтобы получить +5:\n"
+            "   → Нажми кнопку «Поделиться» ниже\n\n"
+            "Или подожди завтра (лимит сбрасывается)",
+            reply_markup=InlineKeyboardMarkup().add(
+                InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
+            ))
         return
 
     # --- ПРОВЕРКА НА YOUTUBE ---
@@ -140,6 +242,20 @@ def handle_callback(call):
     data = user_data.get(chat_id)
     print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data}")
 
+    # === Обработка «Я поделился!» ===
+    if call.data == "share_done":
+        add_credits(call.from_user.id, 5)
+        credits = get_user_credits(call.from_user.id)
+        bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
+        bot.edit_message_text(
+            f"🎉 Готово! Тебе начислено +5 скачиваний!\n\n"
+            f"📊 Всего скачиваний: {credits}\n\n"
+            f"Просто вставь ссылку 👇",
+            chat_id=chat_id,
+            message_id=call.message.message_id
+        )
+        return
+
     # === Обработка YouTube ===
     if call.data in ("yt_video", "yt_audio"):
         if not data or not isinstance(data, dict) or data.get("type") != "youtube":
@@ -151,11 +267,17 @@ def handle_callback(call):
         bot.edit_message_text("⏳ Скачиваю с YouTube...", chat_id=chat_id, message_id=call.message.message_id)
         try:
             filepath, title = download_youtube(url, fmt)
+            file_size_mb = round(os.path.getsize(filepath) / 1024 / 1024, 2)
             with open(filepath, 'rb') as f:
                 if fmt == "audio":
                     bot.send_audio(chat_id, f, caption=f"🎵 {title}")
                 else:
                     bot.send_video(chat_id, f, caption=f"🎬 {title}", supports_streaming=True)
+            # Списываем кредит и записываем загрузку
+            use_credit(call.from_user.id)
+            record_download(call.from_user.id, "youtube", fmt, title, file_size_mb, url)
+            remaining = get_user_credits(call.from_user.id)
+            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
             os.remove(filepath)
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка: {e}")
@@ -188,6 +310,12 @@ def handle_callback(call):
 
         try:
             bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! ")
+            # Списываем кредит и записываем загрузку
+            file_size_mb = round(len(video_data) / 1024 / 1024, 2)
+            use_credit(call.from_user.id)
+            record_download(call.from_user.id, "starmaker", "video", f"StarMaker #{rec_id}", file_size_mb, video_url)
+            remaining = get_user_credits(call.from_user.id)
+            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
 
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
@@ -211,6 +339,12 @@ def handle_callback(call):
             audio.export(audio_bytes, format="mp3", bitrate="128k")
             audio_bytes.seek(0)
             bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио!")
+            # Списываем кредит и записываем загрузку
+            file_size_mb = round(len(audio_bytes.getvalue()) / 1024 / 1024, 2)
+            use_credit(call.from_user.id)
+            record_download(call.from_user.id, "starmaker", "audio", f"StarMaker #{rec_id}", file_size_mb, video_url)
+            remaining = get_user_credits(call.from_user.id)
+            bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
 
             # Очистка
             del audio
