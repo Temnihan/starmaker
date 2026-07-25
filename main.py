@@ -124,12 +124,8 @@ def download_file(url):
 def start_message(message):
     user = get_or_create_user(message.from_user.id, message.from_user.username)
     bot.reply_to(message,
-        f"🎵 *FreeStarMaker*\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Просто вставь ссылку 👇\n"
-        f"_StarMaker или YouTube_\n\n"
-        f"🎁 Твои скачивания: *{user['credits']}*\n"
-        f"📢 Больше? → /share",
+        f"*Просто вставь сюда ссылку*\n\n"
+        f"Осталось скачиваний: {user['credits']}",
         parse_mode="Markdown")
 
 
