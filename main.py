@@ -269,7 +269,7 @@ def handle_callback(call):
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "youtube", fmt, title, file_size_mb, url)
             user = get_or_create_user(call.from_user.id)
-            if user['total_downloads'] >= 5:
+            if user['total_downloads'] > 5:
                 remaining = get_user_credits(call.from_user.id)
                 bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
             else:
@@ -311,7 +311,7 @@ def handle_callback(call):
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "starmaker", "video", f"StarMaker #{rec_id}", file_size_mb, video_url)
             user = get_or_create_user(call.from_user.id)
-            if user['total_downloads'] >= 5:
+            if user['total_downloads'] > 5:
                 remaining = get_user_credits(call.from_user.id)
                 bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
             else:
@@ -344,7 +344,7 @@ def handle_callback(call):
             use_credit(call.from_user.id)
             record_download(call.from_user.id, "starmaker", "audio", f"StarMaker #{rec_id}", file_size_mb, video_url)
             user = get_or_create_user(call.from_user.id)
-            if user['total_downloads'] >= 5:
+            if user['total_downloads'] > 5:
                 remaining = get_user_credits(call.from_user.id)
                 bot.send_message(chat_id, f"✅ Скачано! Осталось скачиваний: {remaining}")
             else:
