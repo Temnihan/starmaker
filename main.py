@@ -124,14 +124,13 @@ def download_file(url):
 def start_message(message):
     user = get_or_create_user(message.from_user.id, message.from_user.username)
     bot.reply_to(message,
-        f"👋 Привет, {message.from_user.first_name}!\n\n"
-        f"📌 Как пользоваться:\n"
-        f"1. Скопируй ссылку из StarMaker или YouTube\n"
-        f"2. Вставь её сюда\n"
-        f"3. Выбери формат (видео или аудио)\n\n"
-        f"🎁 У тебя {user['credits']} скачиваний\n"
-        f"📢 Хочешь больше? Напиши /share\n\n"
-        f"Просто вставь ссылку 👇")
+        f"🎵 *FreeStarMaker*\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Просто вставь ссылку 👇\n"
+        f"_StarMaker или YouTube_\n\n"
+        f"🎁 Твои скачивания: *{user['credits']}*\n"
+        f"📢 Больше? → /share",
+        parse_mode="Markdown")
 
 
 # ===== 4.1 Обработчик команды /share =====
