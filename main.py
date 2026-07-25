@@ -14,6 +14,7 @@ bot = telebot.TeleBot(TOKEN)
 # ===== Временное хранилище для recordingId (связываем с chat_id) =====
 user_data = {}
 SUPPORT_TEXT = "Ваша поддержка — лучшая благодарность. \n🧡)"
+ADMIN_CHAT_ID = 158043939  # Твой Telegram ID для уведомлений
 
 
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
@@ -55,6 +56,23 @@ def handle_message(message):
     if not rec_id:
         bot.reply_to(message, "❌ Не нашёл recordingId в ссылке. Убедись, что ссылка содержит 'recordingId='.")
         return
+
+    # Уведомление админу о новом пользователе
+    try:
+        user_name = message.from_user.first_name or ""
+        user_last = message.from_user.last_name or ""
+        username = message.from_user.username or "нет username"
+        full_name = f"{user_name} {user_last}".strip()
+        notify_text = (
+            f"🔔 Новый запрос!\n"
+            f"👤 {full_name} (@{username})\n"
+            f"🆔 ID: {message.from_user.id}\n"
+            f"🔗 Recording: {rec_id}\n"
+            f"💬 Chat ID: {message.chat.id}"
+        )
+        bot.send_message(ADMIN_CHAT_ID, notify_text)
+    except Exception as e:
+        print(f"Ошибка отправки уведомления: {e}")
 
     # Сохраняем ID пользователя
     user_data[message.chat.id] = rec_id
