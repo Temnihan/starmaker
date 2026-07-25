@@ -123,10 +123,7 @@ def download_file(url):
 @bot.message_handler(commands=['start'])
 def start_message(message):
     user = get_or_create_user(message.from_user.id, message.from_user.username)
-    bot.reply_to(message,
-        f"*Просто вставь сюда ссылку*\n\n"
-        f"Осталось скачиваний: {user['credits']}",
-        parse_mode="Markdown")
+    bot.reply_to(message, "*Просто вставь сюда ссылку*", parse_mode="Markdown")
 
 
 # ===== 4.1 Обработчик команды /share =====
