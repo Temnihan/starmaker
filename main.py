@@ -17,6 +17,29 @@ SUPPORT_TEXT = "Ваша поддержка — лучшая благодарн�
 ADMIN_CHAT_ID = 158043939  # Твой Telegram ID для уведомлений
 
 
+# ===== Функция скачивания YouTube =====
+def download_youtube(url, format_type="video"):
+    """Скачивает YouTube видео/аудио через yt_dlp. Возвращает (путь, название)."""
+    ydl_opts = {
+        'format': 'best[height<=720]' if format_type == "video" else 'bestaudio/best',
+        'outtmpl': '/tmp/yt_%(id)s.%(ext)s',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    if format_type == "audio":
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        ext = 'mp3' if format_type == "audio" else info.get('ext', 'mp4')
+        filepath = f"/tmp/yt_{info['id']}.{ext}"
+        title = info.get('title', 'YouTube Video')
+        return filepath, title
+
+
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
 def extract_recording_id(text):
     """Ищет в тексте recordingId=число и возвращает число или None."""
@@ -46,9 +69,27 @@ def handle_message(message):
     if not text:
         bot.reply_to(message, "Пришли ссылку ")
         return
-        # --- ПРОВЕРКА НА YOUTUBE ---
+
+    # --- ПРОВЕРКА НА YOUTUBE ---
     if 'youtube.com' in text or 'youtu.be' in text:
-        bot.reply_to(message, "🎬 Обнаружена ссылка YouTube. Начинаю скачивание...")
+        # Уведомление админу
+        try:
+            user_name = message.from_user.first_name or ""
+            username = message.from_user.username or "нет username"
+            bot.send_message(ADMIN_CHAT_ID,
+                f"🔔 YouTube запрос!\n👤 {user_name} (@{username})\n🆔 ID: {message.from_user.id}\n🔗 {text[:100]}")
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
+
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="yt_video")
+        btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="yt_audio")
+        btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
+        keyboard.add(btn_video, btn_audio, btn_support)
+        bot.reply_to(message, "🎬 YouTube обнаружен! Выбери формат:", reply_markup=keyboard)
+        user_data[message.chat.id] = {"type": "youtube", "url": text}
+        return
+
     print(
         f"[{datetime.datetime.now()}] Пользователь {message.from_user.id} (@{message.from_user.username}) отправил ссылку: {text[:100]}...")
 
@@ -96,11 +137,35 @@ def handle_message(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     chat_id = call.message.chat.id
-    rec_id = user_data.get(chat_id)
-    print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data} для rec_id={rec_id}")
+    data = user_data.get(chat_id)
+    print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data}")
 
+    # === Обработка YouTube ===
+    if call.data in ("yt_video", "yt_audio"):
+        if not data or not isinstance(data, dict) or data.get("type") != "youtube":
+            bot.answer_callback_query(call.id, "Сначала отправь YouTube ссылку!")
+            return
+        url = data["url"]
+        fmt = "audio" if call.data == "yt_audio" else "video"
+        bot.answer_callback_query(call.id, "Скачиваю...")
+        bot.edit_message_text("⏳ Скачиваю с YouTube...", chat_id=chat_id, message_id=call.message.message_id)
+        try:
+            filepath, title = download_youtube(url, fmt)
+            with open(filepath, 'rb') as f:
+                if fmt == "audio":
+                    bot.send_audio(chat_id, f, caption=f"🎵 {title}")
+                else:
+                    bot.send_video(chat_id, f, caption=f"🎬 {title}", supports_streaming=True)
+            os.remove(filepath)
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Ошибка: {e}")
+        user_data.pop(chat_id, None)
+        return
+
+    # === Обработка StarMaker ===
+    rec_id = data if isinstance(data, str) else None
     if not rec_id:
-        bot.answer_callback_query(call.id, "Сначала отправь ссылку с recordingId!")
+        bot.answer_callback_query(call.id, "Сначала отправь ссылку!")
         return
 
     # Сообщаем о начале обработки
