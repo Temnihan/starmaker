@@ -232,11 +232,18 @@ def handle_message(message):
 def handle_callback(call):
     chat_id = call.message.chat.id
     data = user_data.get(chat_id)
-    print(f"[{datetime.datetime.now()}] Пользователь {call.from_user.id} запросил {call.data}")
+    print(f"[{datetime.datetime.now()}] CALLBACK: {call.data} от {call.from_user.id}", flush=True)
+    # DEBUG: записываем ВСЕ callbacks
+    with open('/root/share_debug.txt', 'a') as f:
+        f.write(f"\n[{datetime.datetime.now()}] CALLBACK: {call.data} от {call.from_user.id}")
 
     # === Обработка «Я поделился!» ===
     if call.data == "share_done":
         try:
+            # DEBUG: записываем в файл что callback сработал
+            with open('/root/share_debug.txt', 'w') as f:
+                f.write(f"1 - callback share_done сработал! user={call.from_user.id} time={datetime.datetime.now()}")
+            print(f"DEBUG: share_done callback получен от {call.from_user.id}", flush=True)
             add_credits(call.from_user.id, 5)
             credits = get_user_credits(call.from_user.id)
             bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
@@ -247,7 +254,9 @@ def handle_callback(call):
                 message_id=call.message.message_id
             )
         except Exception as e:
-            print(f"ОШИБКА share_done: {e}")
+            print(f"ОШИБКА share_done: {e}", flush=True)
+            with open('/root/share_debug.txt', 'w') as f:
+                f.write(f"ОШИБКА: {e}")
             bot.answer_callback_query(call.id, f"Ошибка: {e}")
         return
 
