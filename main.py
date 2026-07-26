@@ -122,6 +122,9 @@ def download_file(url):
 # ===== 4. Обработчик команды /start =====
 @bot.message_handler(commands=['start'])
 def start_message(message):
+    print("это старт", flush=True)
+    with open('/root/share_debug.txt', 'a') as f:
+        f.write(f"\n[{datetime.datetime.now()}] это старт от {message.from_user.id}")
     user = get_or_create_user(message.from_user.id, message.from_user.username)
     bot.reply_to(message, "*Просто вставь сюда ссылку*", parse_mode="Markdown")
 
@@ -129,9 +132,9 @@ def start_message(message):
 # ===== 4.1 Обработчик команды /share =====
 @bot.message_handler(commands=['share'])
 def share_message(message):
-    print(f"DEBUG: /share получен от {message.from_user.id}", flush=True)
+    print("это share", flush=True)
     with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] /share от {message.from_user.id}")
+        f.write(f"\n[{datetime.datetime.now()}] это share от {message.from_user.id}")
     keyboard = InlineKeyboardMarkup(row_width=1)
     btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
     btn_done = InlineKeyboardButton("✅ Я поделился! (+5 скачиваний)", callback_data="share_done")
@@ -148,10 +151,9 @@ def share_message(message):
 # ===== 5. Обработчик текстовых сообщений =====
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    # DEBUG: логируем ВСЕ сообщения
+    print("это handle_message", flush=True)
     with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] MSG: {message.text} от {message.from_user.id}")
-    print(f"DEBUG MSG: {message.text} от {message.from_user.id}", flush=True)
+        f.write(f"\n[{datetime.datetime.now()}] это handle_message: {message.text} от {message.from_user.id}")
     text = message.text
     rec_id = extract_recording_id(text)
     if not text:
@@ -239,10 +241,9 @@ def handle_message(message):
 def handle_callback(call):
     chat_id = call.message.chat.id
     data = user_data.get(chat_id)
-    print(f"[1 заход-] CALLBACK: {call.data} от {call.from_user.id}", flush=True)
-    # DEBUG: записываем ВСЕ callbacks
+    print("это handle_callback", flush=True)
     with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] CALLBACK: {call.data} от {call.from_user.id}")
+        f.write(f"\n[{datetime.datetime.now()}] это handle_callback: {call.data} от {call.from_user.id}")
 
     # === Обработка «Я поделился!» ===
     if call.data == "share_done":
