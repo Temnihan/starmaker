@@ -11,6 +11,9 @@ import sqlite3
 # ===== 1. Токен бота =====
 import os
 TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TOKEN")
+if not TOKEN:
+    print("❌ ОШИБКА: Токен не найден! Установи TELEGRAM_TOKEN в .env", flush=True)
+    exit(1)
 bot = telebot.TeleBot(TOKEN)
 
 # ===== Временное хранилище для recordingId (связываем с chat_id) =====
@@ -122,9 +125,6 @@ def download_file(url):
 # ===== 4. Обработчик команды /start =====
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    print("это старт", flush=True)
-    with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] это старт от {message.from_user.id}")
     user = get_or_create_user(message.from_user.id, message.from_user.username)
     bot.reply_to(message, "*Просто вставь сюда ссылку*", parse_mode="Markdown")
 
@@ -132,9 +132,6 @@ def start_message(message):
 # ===== 4.1 Обработчик команды /share =====
 @bot.message_handler(commands=['share'])
 def share_message(message):
-    print("это share", flush=True)
-    with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] это share от {message.from_user.id}")
     keyboard = InlineKeyboardMarkup(row_width=1)
     btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
     btn_done = InlineKeyboardButton("✅ Я поделился! (+5 скачиваний)", callback_data="share_done")
@@ -151,9 +148,6 @@ def share_message(message):
 # ===== 5. Обработчик текстовых сообщений =====
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    print("это handle_message", flush=True)
-    with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] это handle_message: {message.text} от {message.from_user.id}")
     text = message.text
     rec_id = extract_recording_id(text)
     if not text:
@@ -241,17 +235,10 @@ def handle_message(message):
 def handle_callback(call):
     chat_id = call.message.chat.id
     data = user_data.get(chat_id)
-    print("это handle_callback", flush=True)
-    with open('/root/share_debug.txt', 'a') as f:
-        f.write(f"\n[{datetime.datetime.now()}] это handle_callback: {call.data} от {call.from_user.id}")
 
     # === Обработка «Я поделился!» ===
     if call.data == "share_done":
         try:
-            # DEBUG: записываем в файл что callback сработал
-            with open('/root/share_debug.txt', 'w') as f:
-                f.write(f"1 - callback share_done сработал! user={call.from_user.id} time={datetime.datetime.now()}")
-            print(f"DEBUG: share_done callback получен от {call.from_user.id}", flush=True)
             add_credits(call.from_user.id, 5)
             credits = get_user_credits(call.from_user.id)
             bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
@@ -262,9 +249,7 @@ def handle_callback(call):
                 message_id=call.message.message_id
             )
         except Exception as e:
-            print(f"ОШИБКА share_done: {e}", flush=True)
-            with open('/root/share_debug.txt', 'w') as f:
-                f.write(f"ОШИБКА: {e}")
+            print(f"ОШИБКА share_done: {e}")
             bot.answer_callback_query(call.id, f"Ошибка: {e}")
         return
 
@@ -391,4 +376,10 @@ def handle_callback(call):
 if __name__ == "__main__":
     import sys
     print("🚀 Бот запущен и готов к работе!", flush=True)
+    # Сбрасываем offset чтобы не застревал
+    try:
+        bot.get_updates(offset=-1, timeout=1)
+        print("✅ Offset сброшен", flush=True)
+    except:
+        pass
     bot.polling(none_stop=True, timeout=2, long_polling_timeout=2)
