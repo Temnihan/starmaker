@@ -145,6 +145,10 @@ def share_message(message):
 # ===== 5. Обработчик текстовых сообщений =====
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    # DEBUG: логируем ВСЕ сообщения
+    with open('/root/share_debug.txt', 'a') as f:
+        f.write(f"\n[{datetime.datetime.now()}] MSG: {message.text} от {message.from_user.id}")
+    print(f"DEBUG MSG: {message.text} от {message.from_user.id}", flush=True)
     text = message.text
     rec_id = extract_recording_id(text)
     if not text:
