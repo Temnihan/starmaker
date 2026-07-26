@@ -236,16 +236,19 @@ def handle_callback(call):
 
     # === Обработка «Я поделился!» ===
     if call.data == "share_done":
-        add_credits(call.from_user.id, 5)
-        credits = get_user_credits(call.from_user.id)
-        bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
-        bot.edit_message_text(
-            f"🎉 Готово! Тебе начислено +5 скачиваний!\n\n"
-            f"📊 Всего скачиваний: {credits}\n\n"
-            f"Просто вставь ссылку 👇",
-            chat_id=chat_id,
-            message_id=call.message.message_id
-        )
+        try:
+            add_credits(call.from_user.id, 5)
+            credits = get_user_credits(call.from_user.id)
+            bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
+            bot.edit_message_text(
+                f"🎉 Готово! Тебе начислено +5 скачиваний!\n\n"
+                f"Просто вставь ссылку 👇",
+                chat_id=chat_id,
+                message_id=call.message.message_id
+            )
+        except Exception as e:
+            print(f"ОШИБКА share_done: {e}")
+            bot.answer_callback_query(call.id, f"Ошибка: {e}")
         return
 
     # === Обработка YouTube ===
