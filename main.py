@@ -129,6 +129,9 @@ def start_message(message):
 # ===== 4.1 Обработчик команды /share =====
 @bot.message_handler(commands=['share'])
 def share_message(message):
+    print(f"DEBUG: /share получен от {message.from_user.id}", flush=True)
+    with open('/root/share_debug.txt', 'a') as f:
+        f.write(f"\n[{datetime.datetime.now()}] /share от {message.from_user.id}")
     keyboard = InlineKeyboardMarkup(row_width=1)
     btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
     btn_done = InlineKeyboardButton("✅ Я поделился! (+5 скачиваний)", callback_data="share_done")
