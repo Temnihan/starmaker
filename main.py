@@ -372,5 +372,6 @@ def handle_callback(call):
 
 # ===== 6. Запуск бота =====
 if __name__ == "__main__":
-    print("🚀 Бот запущен и готов к работе!")
-    bot.polling(none_stop=True)
+    import sys
+    print("🚀 Бот запущен и готов к работе!", flush=True)
+    bot.polling(none_stop=True, timeout=2, long_polling_timeout=2)
