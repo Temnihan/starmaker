@@ -239,7 +239,7 @@ def handle_message(message):
 def handle_callback(call):
     chat_id = call.message.chat.id
     data = user_data.get(chat_id)
-    print(f"[{datetime.datetime.now()}] CALLBACK: {call.data} от {call.from_user.id}", flush=True)
+    print(f"[1 заход-] CALLBACK: {call.data} от {call.from_user.id}", flush=True)
     # DEBUG: записываем ВСЕ callbacks
     with open('/root/share_debug.txt', 'a') as f:
         f.write(f"\n[{datetime.datetime.now()}] CALLBACK: {call.data} от {call.from_user.id}")
