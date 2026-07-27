@@ -3,7 +3,6 @@ import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import datetime
-import gc   # для очищения памяти
 # for you tube
 import yt_dlp
 # для базы данных
@@ -16,8 +15,28 @@ if not TOKEN:
     exit(1)
 bot = telebot.TeleBot(TOKEN)
 
+# Проверка ffmpeg
+import shutil
+if not shutil.which("ffmpeg"):
+    print("⚠️ ВНИМАНИЕ: ffmpeg не установлен! Конвертация аудио не будет работать", flush=True)
+
 # ===== Временное хранилище для recordingId (связываем с chat_id) =====
 user_data = {}
+USER_DATA_TIMEOUT = 600  # 10 минут
+
+def cleanup_user_data():
+    """Удаляет записи старше 10 минут."""
+    now = datetime.datetime.now()
+    to_delete = []
+    for chat_id, data in user_data.items():
+        if isinstance(data, dict) and 'timestamp' in data:
+            if (now - data['timestamp']).seconds > USER_DATA_TIMEOUT:
+                to_delete.append(chat_id)
+        elif isinstance(data, str):
+            # Старый формат без timestamp — удаляем
+            to_delete.append(chat_id)
+    for chat_id in to_delete:
+        user_data.pop(chat_id, None)
 SUPPORT_TEXT = "Ваша поддержка — лучшая благодарность. \n🧡)"
 ADMIN_CHAT_ID = 158043939  # Твой Telegram ID для уведомлений
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bot.db')
@@ -80,7 +99,7 @@ def get_user_credits(user_id):
 
 # ===== Функция скачивания YouTube =====
 def download_youtube(url, format_type="video"):
-    """Скачивает YouTube видео/аудио через yt_dlp. Возвращает (путь, название)."""
+    """Скачивает YouTube видео/аудио через yt_dlp. Возвращает (путь, название) или (None, None)."""
     ydl_opts = {
         'format': 'best[height<=720]' if format_type == "video" else 'bestaudio/best',
         'outtmpl': '/tmp/yt_%(id)s.%(ext)s',
@@ -93,12 +112,16 @@ def download_youtube(url, format_type="video"):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }]
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        ext = 'mp3' if format_type == "audio" else info.get('ext', 'mp4')
-        filepath = f"/tmp/yt_{info['id']}.{ext}"
-        title = info.get('title', 'YouTube Video')
-        return filepath, title
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            ext = 'mp3' if format_type == "audio" else info.get('ext', 'mp4')
+            filepath = f"/tmp/yt_{info['id']}.{ext}"
+            title = info.get('title', 'YouTube Video')
+            return filepath, title
+    except Exception as e:
+        print(f"Ошибка скачивания YouTube: {e}")
+        return None, None
 
 
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
@@ -107,19 +130,32 @@ def extract_recording_id(text):
     match = re.search(r'recordingId=(\d+)', text)
     return match.group(1) if match else None
 
+def is_valid_youtube_url(text):
+    """Проверяет что это настоящая YouTube ссылка."""
+    pattern = r'^https?://(www\.)?(youtube\.com|youtu\.be)/'
+    return bool(re.match(pattern, text.strip()))
+
 
 # ===== 3. Функция скачивания файла по ссылке =====
 def download_file(url):
-    """Скачивает файл и возвращает его содержимое (байты) или None."""
-    try:
-        response = requests.get(url, timeout=15)
-        if response.status_code == 200:
-            return response.content
-        else:
-            return None
-    except Exception as e:
-        print("Ошибка при скачивании:", e)
-        return None
+    """Скачивает файл с повторными попытками. Возвращает байты или None."""
+    for attempt in range(3):
+        try:
+            response = requests.get(url, timeout=15)
+            if response.status_code == 200:
+                return response.content
+            elif response.status_code == 404:
+                return None  # Файл не существует — не повторяем
+        except Exception as e:
+            print(f"Попытка {attempt+1}/3 не удалась: {e}")
+            if attempt < 2:
+                import time
+                time.sleep(2)
+    return None
+
+# Лимиты Telegram
+MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 МБ
+MAX_AUDIO_SIZE = 20 * 1024 * 1024  # 20 МБ
 
 
 # ===== 4. Обработчик команды /start =====
@@ -168,7 +204,7 @@ def handle_message(message):
         return
 
     # --- ПРОВЕРКА НА YOUTUBE ---
-    if 'youtube.com' in text or 'youtu.be' in text:
+    if is_valid_youtube_url(text):
         # Уведомление админу
         try:
             user_name = message.from_user.first_name or ""
@@ -184,7 +220,8 @@ def handle_message(message):
         btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
         keyboard.add(btn_video, btn_audio, btn_support)
         bot.reply_to(message, "🎬 YouTube обнаружен! Выбери формат:", reply_markup=keyboard)
-        user_data[message.chat.id] = {"type": "youtube", "url": text}
+        cleanup_user_data()
+        user_data[message.chat.id] = {"type": "youtube", "url": text, "timestamp": datetime.datetime.now()}
         return
 
     print(
@@ -213,7 +250,8 @@ def handle_message(message):
         print(f"Ошибка отправки уведомления: {e}")
 
     # Сохраняем ID пользователя
-    user_data[message.chat.id] = rec_id
+    cleanup_user_data()
+    user_data[message.chat.id] = {"type": "starmaker", "rec_id": rec_id, "timestamp": datetime.datetime.now()}
 
     # Создаём кнопки
     keyboard = InlineKeyboardMarkup(row_width=2)
@@ -264,6 +302,10 @@ def handle_callback(call):
         bot.edit_message_text("⏳ Скачиваю с YouTube...", chat_id=chat_id, message_id=call.message.message_id)
         try:
             filepath, title = download_youtube(url, fmt)
+            if filepath is None:
+                bot.send_message(chat_id, "❌ Не удалось скачать видео. Возможно, оно недоступно или требует авторизации.")
+                user_data.pop(chat_id, None)
+                return
             file_size_mb = round(os.path.getsize(filepath) / 1024 / 1024, 2)
             with open(filepath, 'rb') as f:
                 if fmt == "audio":
@@ -286,10 +328,10 @@ def handle_callback(call):
         return
 
     # === Обработка StarMaker ===
-    rec_id = data if isinstance(data, str) else None
-    if not rec_id:
+    if not data or not isinstance(data, dict) or data.get("type") != "starmaker":
         bot.answer_callback_query(call.id, "Сначала отправь ссылку!")
         return
+    rec_id = data.get("rec_id")
 
     # Сообщаем о начале обработки
     bot.answer_callback_query(call.id, "Начинаю обработку...")
@@ -309,6 +351,11 @@ def handle_callback(call):
             bot.send_message(chat_id, "❌ Не удалось скачать видео. Возможно, файл не существует.")
             return
 
+        if len(video_data) > MAX_VIDEO_SIZE:
+            bot.send_message(chat_id, f"❌ Файл слишком большой ({round(len(video_data)/1024/1024, 1)} МБ). Лимит Telegram: 50 МБ.")
+            user_data.pop(chat_id, None)
+            return
+
         try:
             bot.send_video(chat_id, video_data, caption=f"🎬 Вот твоё видео! ")
             # Списываем кредит и записываем загрузку
@@ -326,7 +373,6 @@ def handle_callback(call):
             bot.send_message(chat_id, f"❌ Ошибка при отправке видео: {e}")
         finally:
             del video_data
-            gc.collect()
 
     elif call.data == "audio":
         try:
@@ -343,6 +389,12 @@ def handle_callback(call):
             audio_bytes = io.BytesIO()
             audio.export(audio_bytes, format="mp3", bitrate="128k")
             audio_bytes.seek(0)
+            
+            if len(audio_bytes.getvalue()) > MAX_AUDIO_SIZE:
+                bot.send_message(chat_id, f"❌ Аудио слишком большое ({round(len(audio_bytes.getvalue())/1024/1024, 1)} МБ). Лимит Telegram: 20 МБ.")
+                user_data.pop(chat_id, None)
+                return
+            
             bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио!")
             # Списываем кредит и записываем загрузку
             file_size_mb = round(len(audio_bytes.getvalue()) / 1024 / 1024, 2)
@@ -359,7 +411,6 @@ def handle_callback(call):
             del audio
             del audio_bytes
             del video_data
-            gc.collect()
 
         except Exception as e:
             bot.send_message(chat_id, f"❌ Ошибка конвертации: {e}")
