@@ -135,6 +135,11 @@ def is_valid_youtube_url(text):
     pattern = r'^https?://(www\.)?(youtube\.com|youtu\.be)/'
     return bool(re.match(pattern, text.strip()))
 
+def is_valid_rutube_url(text):
+    """Проверяет что это настоящая Rutube ссылка."""
+    pattern = r'^https?://(www\.)?rutube\.ru/'
+    return bool(re.match(pattern, text.strip()))
+
 
 # ===== 3. Функция скачивания файла по ссылке =====
 def download_file(url):
@@ -224,11 +229,40 @@ def handle_message(message):
         user_data[message.chat.id] = {"type": "youtube", "url": text, "timestamp": datetime.datetime.now()}
         return
 
+    # --- ПРОВЕРКА НА RUTUBE ---
+    if is_valid_rutube_url(text):
+        # Уведомление админу
+        try:
+            user_name = message.from_user.first_name or ""
+            username = message.from_user.username or "нет username"
+            bot.send_message(ADMIN_CHAT_ID,
+                f"🔔 Rutube запрос!\n👤 {user_name} (@{username})\n🆔 ID: {message.from_user.id}\n🔗 {text[:100]}")
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
+
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="yt_video")
+        btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="yt_audio")
+        btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
+        keyboard.add(btn_video, btn_audio, btn_support)
+        bot.reply_to(message, "🎬 Rutube обнаружен! Выбери формат:", reply_markup=keyboard)
+        cleanup_user_data()
+        user_data[message.chat.id] = {"type": "rutube", "url": text, "timestamp": datetime.datetime.now()}
+        return
+
     print(
         f"[{datetime.datetime.now()}] Пользователь {message.from_user.id} (@{message.from_user.username}) отправил ссылку: {text[:100]}...")
 
 
     if not rec_id:
+        # Уведомление админу о неизвестной ссылке
+        try:
+            user_name = message.from_user.first_name or ""
+            username = message.from_user.username or "нет username"
+            bot.send_message(ADMIN_CHAT_ID,
+                f"⚠️ Неизвестная ссылка!\n👤 {user_name} (@{username})\n🆔 ID: {message.from_user.id}\n🔗 {text[:150]}")
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
         bot.reply_to(message, "❌ Не нашёл recordingId в ссылке. Убедись, что ссылка содержит 'recordingId='.")
         return
 
