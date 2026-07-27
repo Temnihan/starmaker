@@ -101,10 +101,11 @@ def get_user_credits(user_id):
 def download_youtube(url, format_type="video"):
     """Скачивает YouTube видео/аудио через yt_dlp. Возвращает (путь, название) или (None, None)."""
     ydl_opts = {
-        'format': 'best[height<=720]' if format_type == "video" else 'bestaudio/best',
+        'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best' if format_type == "video" else 'bestaudio/best',
         'outtmpl': '/tmp/yt_%(id)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
+        'merge_output_format': 'mp4' if format_type == "video" else None,
     }
     if format_type == "audio":
         ydl_opts['postprocessors'] = [{
@@ -325,15 +326,15 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, f"Ошибка: {e}")
         return
 
-    # === Обработка YouTube ===
+    # === Обработка YouTube / Rutube ===
     if call.data in ("yt_video", "yt_audio"):
-        if not data or not isinstance(data, dict) or data.get("type") != "youtube":
-            bot.answer_callback_query(call.id, "Сначала отправь YouTube ссылку!")
+        if not data or not isinstance(data, dict) or data.get("type") not in ("youtube", "rutube"):
+            bot.answer_callback_query(call.id, "Сначала отправь ссылку!")
             return
         url = data["url"]
         fmt = "audio" if call.data == "yt_audio" else "video"
         bot.answer_callback_query(call.id, "Скачиваю...")
-        bot.edit_message_text("⏳ Скачиваю с YouTube...", chat_id=chat_id, message_id=call.message.message_id)
+        bot.edit_message_text("⏳ Скачиваю...", chat_id=chat_id, message_id=call.message.message_id)
         try:
             filepath, title = download_youtube(url, fmt)
             if filepath is None:
@@ -348,7 +349,7 @@ def handle_callback(call):
                     bot.send_video(chat_id, f, caption=f"🎬 {title}", supports_streaming=True)
             # Списываем кредит и записываем загрузку
             use_credit(call.from_user.id)
-            record_download(call.from_user.id, "youtube", fmt, title, file_size_mb, url)
+            record_download(call.from_user.id, data.get("type", "youtube"), fmt, title, file_size_mb, url)
             user = get_or_create_user(call.from_user.id)
             if user['total_downloads'] > 5:
                 remaining = get_user_credits(call.from_user.id)
