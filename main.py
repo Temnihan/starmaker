@@ -448,7 +448,12 @@ def handle_callback(call):
                 user_data.pop(chat_id, None)
                 return
             
-            bot.send_audio(chat_id, audio_bytes, caption=f"🎵 Вот твоё аудио!")
+            tmp_path = f"/tmp/starmaker_{rec_id}.mp3"
+            with open(tmp_path, "wb") as tmp:
+                tmp.write(audio_bytes.getvalue())
+            with open(tmp_path, "rb") as tmp:
+                bot.send_audio(chat_id, tmp, caption=f"🎵 Вот твоё аудио!", title=f"StarMaker #{rec_id}")
+            os.remove(tmp_path)
             # Списываем кредит и записываем загрузку
             file_size_mb = round(len(audio_bytes.getvalue()) / 1024 / 1024, 2)
             use_credit(call.from_user.id)
