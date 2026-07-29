@@ -131,6 +131,22 @@ def extract_recording_id(text):
     match = re.search(r'recordingId=(\d+)', text)
     return match.group(1) if match else None
 
+def resolve_starmaker_link(text):
+    """Разрешает короткую ссылку StarMaker (onelink.me) и возвращает recordingId."""
+    match = re.search(r'(https?://starmaker\.onelink\.me/\S+)', text)
+    if not match:
+        return None
+    url = match.group(1)
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
+        final_url = resp.url
+        rec_match = re.search(r'recordingId=(\d+)', final_url)
+        if rec_match:
+            return rec_match.group(1)
+    except Exception as e:
+        print(f"Ошибка разрешения ссылки: {e}")
+    return None
+
 def is_valid_youtube_url(text):
     """Проверяет что это настоящая YouTube ссылка."""
     pattern = r'^https?://(www\.)?(youtube\.com|youtu\.be)/'
@@ -192,6 +208,8 @@ def share_message(message):
 def handle_message(message):
     text = message.text
     rec_id = extract_recording_id(text)
+    if not rec_id:
+        rec_id = resolve_starmaker_link(text)
     if not text:
         bot.reply_to(message, "Пришли ссылку ")
         return
