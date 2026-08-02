@@ -54,7 +54,7 @@ def get_or_create_user(user_id, username=None):
     c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
     user = c.fetchone()
     if not user:
-        c.execute("INSERT INTO users (user_id, username, credits) VALUES (?, ?, 5)",
+        c.execute("INSERT INTO users (user_id, username, credits) VALUES (?, ?, 3)",
                   (user_id, username))
         conn.commit()
         c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
@@ -71,7 +71,7 @@ def use_credit(user_id):
     conn.close()
     return changed > 0
 
-def add_credits(user_id, amount=5):
+def add_credits(user_id, amount=3):
     conn = get_db()
     c = conn.cursor()
     c.execute("UPDATE users SET credits = credits + ?, shares = shares + 1 WHERE user_id=?", (amount, user_id))
@@ -111,7 +111,7 @@ def download_youtube(url, format_type="video"):
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
-            'preferredquality': '192',
+            'preferredquality': '64',
         }]
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -126,6 +126,45 @@ def download_youtube(url, format_type="video"):
 
 
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
+def download_tiktok(url):
+    """Скачивает TikTok видео через requests. Возвращает (путь, название) или (None, None)."""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        content = resp.text
+        
+        # Ищем video_url в HTML
+        import re
+        video_urls = re.findall(r'"playAddr"\s*:\s*"([^"]+)"', content)
+        if not video_urls:
+            video_urls = re.findall(r'"downloadAddr"\s*:\s*"([^"]+)"', content)
+        
+        if not video_urls:
+            return None, None
+        
+        # Декодируем Unicode escapes
+        video_url = video_urls[0]
+        video_url = video_url.encode().decode('unicode_escape')
+        
+        # Скачиваем видео
+        video_resp = requests.get(video_url, headers=headers, timeout=30)
+        if video_resp.status_code != 200:
+            return None, None
+        
+        # Сохраняем
+        video_id = re.search(r'/video/(\d+)', url)
+        video_id = video_id.group(1) if video_id else 'tiktok'
+        filepath = f'/tmp/tiktok_{video_id}.mp4'
+        with open(filepath, 'wb') as f:
+            f.write(video_resp.content)
+        
+        return filepath, f'TikTok {video_id}'
+    except Exception as e:
+        print(f"Ошибка скачивания TikTok: {e}")
+        return None, None
+
 def extract_recording_id(text):
     """Ищет в тексте recordingId=число и возвращает число или None."""
     match = re.search(r'recordingId=(\d+)', text)
@@ -147,6 +186,22 @@ def resolve_starmaker_link(text):
         print(f"Ошибка разрешения ссылки: {e}")
     return None
 
+def resolve_likee_link(text):
+    """Разрешает короткую ссылку Likee (l.likee.video) и возвращает полный URL."""
+    match = re.search(r'(https?://l\.likee\.video/\S+)', text)
+    if not match:
+        return None
+    url = match.group(1)
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
+        final_url = resp.url
+        # Проверяем что это Likee видео
+        if 'likee.video' in final_url and ('/video/' in final_url or '/v/' in final_url):
+            return final_url
+    except Exception as e:
+        print(f"Ошибка разрешения Likee ссылки: {e}")
+    return None
+
 def is_valid_youtube_url(text):
     """Проверяет что это настоящая YouTube ссылка."""
     pattern = r'^https?://(www\.)?(youtube\.com|youtu\.be)/'
@@ -155,6 +210,16 @@ def is_valid_youtube_url(text):
 def is_valid_rutube_url(text):
     """Проверяет что это настоящая Rutube ссылка."""
     pattern = r'^https?://(www\.)?rutube\.ru/'
+    return bool(re.match(pattern, text.strip()))
+
+def is_valid_likee_url(text):
+    """Проверяет что это настоящая Likee ссылка."""
+    pattern = r'^https?://(www\.)?(likee\.video|l\.likee\.video|likee\.video)/'
+    return bool(re.match(pattern, text.strip()))
+
+def is_valid_tiktok_url(text):
+    """Проверяет что это настоящая TikTok ссылка."""
+    pattern = r'^https?://(www\.)?(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)/'
     return bool(re.match(pattern, text.strip()))
 
 
@@ -192,14 +257,14 @@ def start_message(message):
 def share_message(message):
     keyboard = InlineKeyboardMarkup(row_width=1)
     btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
-    btn_done = InlineKeyboardButton("✅ Я поделился! (+5 скачиваний)", callback_data="share_done")
+    btn_done = InlineKeyboardButton("✅ Я поделился! (+3 скачивания)", callback_data="share_done")
     keyboard.add(btn_share, btn_done)
     bot.reply_to(message,
         "📢 Поделись ботом с друзьями!\n\n"
         "1. Нажми «Поделиться ботом»\n"
         "2. Выбери кому отправить\n"
         "3. Вернись сюда и нажми «Я поделился!»\n\n"
-        "🎁 Получишь +5 скачиваний!",
+        "🎁 Получишь +3 скачивания!",
         reply_markup=keyboard)
 
 
@@ -219,7 +284,7 @@ def handle_message(message):
     if user['credits'] <= 0:
         bot.reply_to(message,
             "😔 У тебя закончились скачивания!\n\n"
-            "📢 Поделись ботом с друзьями, чтобы получить +5:\n"
+            "📢 Поделись ботом с друзьями, чтобы получить +3:\n"
             "   → Нажми кнопку «Поделиться» ниже\n\n"
             "Или подожди завтра (лимит сбрасывается)",
             reply_markup=InlineKeyboardMarkup().add(
@@ -267,6 +332,52 @@ def handle_message(message):
         bot.reply_to(message, "🎬 Rutube обнаружен! Выбери формат:", reply_markup=keyboard)
         cleanup_user_data()
         user_data[message.chat.id] = {"type": "rutube", "url": text, "timestamp": datetime.datetime.now()}
+        return
+
+    # --- ПРОВЕРКА НА LIKEE ---
+    # Разрешаем короткие ссылки Likee
+    likee_url = resolve_likee_link(text)
+    if likee_url:
+        text = likee_url
+    if is_valid_likee_url(text):
+        # Уведомление админу
+        try:
+            user_name = message.from_user.first_name or ""
+            username = message.from_user.username or "нет username"
+            bot.send_message(ADMIN_CHAT_ID,
+                f"🔔 Likee запрос!\n👤 {user_name} (@{username})\n🆔 ID: {message.from_user.id}\n🔗 {text[:100]}")
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
+
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="yt_video")
+        btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="yt_audio")
+        btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
+        keyboard.add(btn_video, btn_audio, btn_support)
+        bot.reply_to(message, "🎬 Likee обнаружен! Выбери формат:", reply_markup=keyboard)
+        cleanup_user_data()
+        user_data[message.chat.id] = {"type": "likee", "url": text, "timestamp": datetime.datetime.now()}
+        return
+
+    # --- ПРОВЕРКА НА TIKTOK ---
+    if is_valid_tiktok_url(text):
+        # Уведомление админу
+        try:
+            user_name = message.from_user.first_name or ""
+            username = message.from_user.username or "нет username"
+            bot.send_message(ADMIN_CHAT_ID,
+                f"🔔 TikTok запрос!\n👤 {user_name} (@{username})\n🆔 ID: {message.from_user.id}\n🔗 {text[:100]}")
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
+
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        btn_video = InlineKeyboardButton("🎬 Видео (MP4)", callback_data="yt_video")
+        btn_audio = InlineKeyboardButton("🎵 Аудио (MP3)", callback_data="yt_audio")
+        btn_support = InlineKeyboardButton("❤️ На чай  10 руб", callback_data="support")
+        keyboard.add(btn_video, btn_audio, btn_support)
+        bot.reply_to(message, "🎬 TikTok обнаружен! Выбери формат:", reply_markup=keyboard)
+        cleanup_user_data()
+        user_data[message.chat.id] = {"type": "tiktok", "url": text, "timestamp": datetime.datetime.now()}
         return
 
     print(
@@ -332,9 +443,9 @@ def handle_callback(call):
         try:
             add_credits(call.from_user.id, 5)
             credits = get_user_credits(call.from_user.id)
-            bot.answer_callback_query(call.id, "✅ +5 скачиваний!")
+            bot.answer_callback_query(call.id, "✅ +3 скачивания!")
             bot.edit_message_text(
-                f"🎉 Готово! Тебе начислено +5 скачиваний!\n\n"
+                f"🎉 Готово! Тебе начислено +3 скачивания!\n\n"
                 f"Просто вставь ссылку 👇",
                 chat_id=chat_id,
                 message_id=call.message.message_id
@@ -346,7 +457,7 @@ def handle_callback(call):
 
     # === Обработка YouTube / Rutube ===
     if call.data in ("yt_video", "yt_audio"):
-        if not data or not isinstance(data, dict) or data.get("type") not in ("youtube", "rutube"):
+        if not data or not isinstance(data, dict) or data.get("type") not in ("youtube", "rutube", "likee", "tiktok"):
             bot.answer_callback_query(call.id, "Сначала отправь ссылку!")
             return
         url = data["url"]
@@ -354,12 +465,34 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Скачиваю...")
         bot.edit_message_text("⏳ Скачиваю...", chat_id=chat_id, message_id=call.message.message_id)
         try:
-            filepath, title = download_youtube(url, fmt)
+            # Для TikTok используем отдельную функцию для видео
+            if data.get("type") == "tiktok" and fmt == "video":
+                filepath, title = download_tiktok(url)
+            else:
+                filepath, title = download_youtube(url, fmt)
             if filepath is None:
                 bot.send_message(chat_id, "❌ Не удалось скачать видео. Возможно, оно недоступно или требует авторизации.")
                 user_data.pop(chat_id, None)
                 return
             file_size_mb = round(os.path.getsize(filepath) / 1024 / 1024, 2)
+            # Проверяем размер перед отправкой (админ без лимита)
+            max_size = MAX_AUDIO_SIZE if fmt == "audio" else MAX_VIDEO_SIZE
+            if os.path.getsize(filepath) > max_size and call.from_user.id != ADMIN_CHAT_ID:
+                limit_mb = 20 if fmt == "audio" else 50
+                bot.send_message(chat_id, f"❌ Файл слишком большой ({file_size_mb} МБ). Лимит Telegram: {limit_mb} МБ.")
+                os.remove(filepath)
+                user_data.pop(chat_id, None)
+                return
+            # Сжимаем видео если слишком большое (только для не-админа)
+            if fmt == "video" and os.path.getsize(filepath) > MAX_VIDEO_SIZE:
+                bot.send_message(chat_id, "⏳ Видео большое, сжимаю...")
+                compressed_path = filepath.replace('.mp4', '_compressed.mp4')
+                os.system(f'ffmpeg -i "{filepath}" -vf "scale=-2:480" -c:v libx264 -crf 28 -c:a aac -b:a 64k "{compressed_path}" -y 2>/dev/null')
+                if os.path.exists(compressed_path) and os.path.getsize(compressed_path) > 0:
+                    os.remove(filepath)
+                    filepath = compressed_path
+                    file_size_mb = round(os.path.getsize(filepath) / 1024 / 1024, 2)
+
             with open(filepath, 'rb') as f:
                 if fmt == "audio":
                     bot.send_audio(chat_id, f, caption=f"🎵 {title}")
@@ -404,7 +537,7 @@ def handle_callback(call):
             bot.send_message(chat_id, "❌ Не удалось скачать видео. Возможно, файл не существует.")
             return
 
-        if len(video_data) > MAX_VIDEO_SIZE:
+        if len(video_data) > MAX_VIDEO_SIZE and call.from_user.id != ADMIN_CHAT_ID:
             bot.send_message(chat_id, f"❌ Файл слишком большой ({round(len(video_data)/1024/1024, 1)} МБ). Лимит Telegram: 50 МБ.")
             user_data.pop(chat_id, None)
             return
