@@ -295,14 +295,18 @@ def handle_message(message):
     # Регистрируем/получаем пользователя и проверяем кредиты
     user = get_or_create_user(message.from_user.id, message.from_user.username)
     if user['credits'] <= 0:
+        keyboard = InlineKeyboardMarkup(row_width=1)
+        btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
+        btn_done = InlineKeyboardButton("✅ Я поделился! (+3 скачивания)", callback_data="share_done")
+        keyboard.add(btn_share, btn_done)
         bot.reply_to(message,
             "😔 У тебя закончились скачивания!\n\n"
             "📢 Поделись ботом с друзьями, чтобы получить +3:\n"
-            "   → Нажми кнопку «Поделиться» ниже\n\n"
+            "1. Нажми «Поделиться ботом»\n"
+            "2. Выбери кому отправить\n"
+            "3. Вернись сюда и нажми «Я поделился!»\n\n"
             "Или подожди завтра (лимит сбрасывается)",
-            reply_markup=InlineKeyboardMarkup().add(
-                InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
-            ))
+            reply_markup=keyboard)
         return
 
     # --- ПРОВЕРКА НА YOUTUBE ---
