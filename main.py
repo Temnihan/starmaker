@@ -127,34 +127,47 @@ def download_youtube(url, format_type="video"):
 
 # ===== 2. Функция, которая вытаскивает recordingId из текста =====
 def download_tiktok(url):
-    """Скачивает TikTok видео через requests. Возвращает (путь, название) или (None, None)."""
+    """Скачивает TikTok видео через cookies. Возвращает (путь, название) или (None, None)."""
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        }
-        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        content = resp.text
-        
-        # Ищем video_url в HTML
         import re
-        video_urls = re.findall(r'"playAddr"\s*:\s*"([^"]+)"', content)
+        
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        })
+        
+        # Получаем cookies
+        session.get('https://www.tiktok.com/', timeout=10)
+        
+        # Разрешаем короткую ссылку
+        resp = session.get(url, timeout=10, allow_redirects=True)
+        final_url = resp.url
+        
+        # Получаем страницу видео
+        resp = session.get(final_url, timeout=10)
+        
+        # Извлекаем video URL
+        video_urls = re.findall(r'"playAddr"\s*:\s*"([^"]+)"', resp.text)
         if not video_urls:
-            video_urls = re.findall(r'"downloadAddr"\s*:\s*"([^"]+)"', content)
+            video_urls = re.findall(r'"downloadAddr"\s*:\s*"([^"]+)"', resp.text)
         
         if not video_urls:
             return None, None
         
-        # Декодируем Unicode escapes
-        video_url = video_urls[0]
-        video_url = video_url.encode().decode('unicode_escape')
+        video_url = video_urls[0].encode().decode('unicode_escape')
         
-        # Скачиваем видео
-        video_resp = requests.get(video_url, headers=headers, timeout=30)
+        # Скачиваем с cookies
+        video_resp = session.get(
+            video_url,
+            headers={'Referer': 'https://www.tiktok.com/', 'Origin': 'https://www.tiktok.com'},
+            timeout=30,
+        )
+        
         if video_resp.status_code != 200:
             return None, None
         
         # Сохраняем
-        video_id = re.search(r'/video/(\d+)', url)
+        video_id = re.search(r'/video/(\d+)', final_url)
         video_id = video_id.group(1) if video_id else 'tiktok'
         filepath = f'/tmp/tiktok_{video_id}.mp4'
         with open(filepath, 'wb') as f:
@@ -624,4 +637,4 @@ if __name__ == "__main__":
         print("✅ Offset сброшен", flush=True)
     except:
         pass
-    bot.polling(none_stop=True, timeout=2, long_polling_timeout=2)
+    bot.polling(none_stop=True, timeout=30, long_polling_timeout=30)
