@@ -1,9 +1,12 @@
 import re
 import requests
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+import requests
+import json
+import base64
+import re
 import datetime
-# for you tube
 import yt_dlp
 # для базы данных
 import sqlite3
@@ -39,6 +42,36 @@ def cleanup_user_data():
         user_data.pop(chat_id, None)
 SUPPORT_TEXT = "Ваша поддержка — лучшая благодарность. \n🧡)"
 ADMIN_CHAT_ID = 158043939  # Твой Telegram ID для уведомлений
+
+# AI Image Generation
+GCLI2API_URL = "http://127.0.0.1:7861/antigravity/v1/chat/completions"
+GCLI2API_KEY = "hermes-gemini-key-2024"
+AI_MODEL = "gemini-3.1-flash-image"
+
+def generate_ai_image(prompt):
+    """Генерирует картинку через Gemini API. Возвращает base64 или None."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {GCLI2API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": AI_MODEL,
+            "messages": [{"role": "user", "content": f"Generate an image: {prompt}"}]
+        }
+        resp = requests.post(GCLI2API_URL, headers=headers, json=payload, timeout=120)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        content = data['choices'][0]['message']['content']
+        # Извлекаем base64 из markdown-ссылки
+        match = re.search(r'data:image/jpeg;base64,([A-Za-z0-9+/=]+)', content)
+        if match:
+            return match.group(1)
+        return None
+    except Exception as e:
+        print(f"AI image error: {e}")
+        return None
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bot.db')
 
 
@@ -262,7 +295,18 @@ MAX_AUDIO_SIZE = 20 * 1024 * 1024  # 20 МБ
 @bot.message_handler(commands=['start'])
 def start_message(message):
     user = get_or_create_user(message.from_user.id, message.from_user.username)
-    bot.reply_to(message, "*Просто вставь сюда ссылку*", parse_mode="Markdown")
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    btn_ai = InlineKeyboardButton("🎨 Сгенерировать картинку", callback_data="ai_menu")
+    btn_share = InlineKeyboardButton("📢 Бесплатные кредиты", callback_data="share_info")
+    keyboard.add(btn_ai, btn_share)
+    bot.reply_to(message,
+        "👋 Привет! Я бот для скачивания и генерации контента!\n\n"
+        "📥 *Скачивание:* просто пришли ссылку\n"
+        "   YouTube • TikTok • StarMaker • Rutube\n\n"
+        "🎨 *AI-картинки:* нажми кнопку ниже\n"
+        "   Или напиши /ai + описание",
+        parse_mode="Markdown",
+        reply_markup=keyboard)
 
 
 # ===== 4.1 Обработчик команды /share =====
@@ -279,6 +323,52 @@ def share_message(message):
         "3. Вернись сюда и нажми «Я поделился!»\n\n"
         "🎁 Получишь +3 скачивания!",
         reply_markup=keyboard)
+
+
+# ===== 4.2 Обработчик команды /help =====
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    bot.reply_to(message,
+        "📖 *Команды бота:*\n\n"
+        "/start — Главное меню\n"
+        "/ai — Сгенерировать картинку\n"
+        "/share — Получить бесплатные кредиты\n"
+        "/help — Эта справка\n\n"
+        "📥 *Скачивание:* просто пришли ссылку\n"
+        "🎨 *AI-картинки:* /ai + описание",
+        parse_mode="Markdown")
+
+
+# ===== 4.3 Обработчик команды /ai =====
+@bot.message_handler(commands=['ai'])
+def ai_image_command(message):
+    prompt = message.text.replace('/ai', '').strip()
+    if not prompt:
+        bot.reply_to(message, "🖼 Напиши что нарисовать после /ai\n\nПример: /ai кот в космосе")
+        return
+    
+    user = get_or_create_user(message.from_user.id, message.from_user.username)
+    if user['credits'] <= 0:
+        bot.reply_to(message, "😔 У тебя закончились кредиты! Поделись ботом: /share")
+        return
+    
+    # Списываем кредит
+    use_credit(message.from_user.id)
+    
+    # Отправляем "генерирую..."
+    msg = bot.reply_to(message, "🎨 Генерирую картинку...")
+    
+    # Генерируем
+    img_base64 = generate_ai_image(prompt)
+    
+    if img_base64:
+        # Декодируем и отправляем
+        img_bytes = base64.b64decode(img_base64)
+        bot.delete_message(message.chat.id, msg.message_id)
+        bot.send_photo(message.chat.id, img_bytes, caption=f"🖼 {prompt}")
+    else:
+        bot.edit_message_text("❌ Ошибка генерации. Попробуй другой промпт.", 
+                            message.chat.id, msg.message_id)
 
 
 # ===== 5. Обработчик текстовых сообщений =====
@@ -450,10 +540,67 @@ def handle_message(message):
 
 
 # ===== 5. Обработчик нажатий на кнопки =====
+def process_ai_prompt(message):
+    """Обрабатывает промпт для AI-генерации."""
+    prompt = message.text.strip()
+    if not prompt:
+        bot.reply_to(message, "❌ Пустой промпт. Попробуй ещё раз: /ai")
+        return
+    
+    user = get_or_create_user(message.from_user.id, message.from_user.username)
+    if user['credits'] <= 0:
+        bot.reply_to(message, "😔 У тебя закончились кредиты! Поделись ботом: /share")
+        return
+    
+    # Списываем кредит
+    use_credit(message.from_user.id)
+    
+    # Отправляем "генерирую..."
+    msg = bot.reply_to(message, "🎨 Генерирую картинку...")
+    
+    # Генерируем
+    img_base64 = generate_ai_image(prompt)
+    
+    if img_base64:
+        img_bytes = base64.b64decode(img_base64)
+        bot.delete_message(message.chat.id, msg.message_id)
+        bot.send_photo(message.chat.id, img_bytes, caption=f"🖼 {prompt}")
+    else:
+        bot.edit_message_text("❌ Ошибка генерации. Попробуй другой промпт.", 
+                            message.chat.id, msg.message_id)
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     chat_id = call.message.chat.id
     data = user_data.get(chat_id)
+
+    # === Обработка «AI меню» ===
+    if call.data == "ai_menu":
+        bot.answer_callback_query(call.id)
+        msg = bot.send_message(chat_id, "🖼 Напиши что нарисовать:\n\nПример: кот в космосе, закат на море, портрет девушки")
+        bot.register_next_step_handler(msg, process_ai_prompt)
+        return
+
+    # === Обработка «Инфо о кредитах» ===
+    if call.data == "share_info":
+        bot.answer_callback_query(call.id)
+        credits = get_user_credits(call.from_user.id)
+        keyboard = InlineKeyboardMarkup(row_width=1)
+        btn_share = InlineKeyboardButton("📢 Поделиться ботом", url="https://t.me/share/url?url=https://t.me/freeStarmakerBot&text=Попробуй этого бота для скачивания видео и музыки!")
+        btn_done = InlineKeyboardButton("✅ Я поделился! (+3 скачивания)", callback_data="share_done")
+        keyboard.add(btn_share, btn_done)
+        bot.edit_message_text(
+            f"💰 Твои кредиты: *{credits}*\n\n"
+            "📢 Поделись ботом с друзьями и получи +3!\n\n"
+            "1. Нажми «Поделиться ботом»\n"
+            "2. Выбери кому отправить\n"
+            "3. Вернись и нажми «Я поделился!»",
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            parse_mode="Markdown",
+            reply_markup=keyboard)
+        return
 
     # === Обработка «Я поделился!» ===
     if call.data == "share_done":
